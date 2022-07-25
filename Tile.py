@@ -1,6 +1,6 @@
 import os
 import random
-from PIL import Image, ImageTk, ImageOps
+
 
 
 UP = 0
@@ -19,6 +19,8 @@ class Tile:
         self.right = []
     
     def rotate(self, nbRotations):
+        # Often we you create a new tile , you can just rotate the old one
+        # This is the purpuse of this function
         self.image = self.image.rotate(90*nbRotations)
         tmp = len(self.edges)
         newEdges = [0]*tmp
@@ -31,6 +33,9 @@ class Tile:
         return f"Edges : {self.edges}, Up : {self.up}, Right: {self.right}, Down : {self.down}, Left : {self.left}"
     
     def analyzeEdges(self, tiles):
+        #  Analyze the edges of the tile and create the adjacency lists for each direction
+        #  The adjacency lists are used to determine if a tile can be placed on a certain direction 
+        #  We are basically creating the rules for the tiles to be placed 
         for i in range(len(tiles)):
             tile = tiles[i]
 
@@ -46,45 +51,5 @@ class Tile:
             #  Left connection
             if tile.edges[RIGHT] == self.edges[LEFT]:
                 self.left.append(i)
-            
-
-    # def __len__(self):
-    #     return len(self.options)
-    
-    # def updateTile(self):
-    #     pass
-
-    # def copy(self):
-    #     newTile = Tile()
-    #     newTile.isColapsed = self.isColapsed
-    #     newTile.options = self.options
-    #     newTile.image = self.image
-    #     return newTile
-
-    # @classmethod
-    # def update(cls):
-    #     if len(Tile.notColapsed) == 0:
-    #         return
-
-    #     for tile in Tile.notColapsed:
-    #         tile.updateTile()
-
-    #     tile = cls.getTileLessEntropy()
-    #     tile.isColapsed = True
-    #     if len(tile.options) == 1:
-    #         tile.image = cls.allTiles[tile.options[0]]
-            
-    #     else:
-    #         tile.image = cls.allTiles[random.choice(tile.options)]
-    #     cls.notColapsed.remove(tile)
-    
-    # @classmethod
-    # def getTileLessEntropy(cls):
-    #     cls.notColapsed.sort(key=lambda x: len(x))
-    #     return cls.notColapsed[0]
-
-    # @classmethod
-    # def init(cls):
-    #     cls.allTiles = getAllTiles()
-    
+        
     

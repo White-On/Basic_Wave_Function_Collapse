@@ -4,11 +4,13 @@ from tkinter import *
 from Tile import *
 from Grid import *
 import numpy as np
+from PIL import  ImageTk
 
 DEFAULT = 5 #the index of the default tile 5 without allDir, 6 otherwise
 tileSize = 20
 
 def getAllTiles():
+    """ Returns a list of all the tiles"""
     # add a special Tile "all Directions"
     # tilesName = [ "blank", "up", "right", "down", "left","allDir","default"];
 
@@ -19,24 +21,26 @@ def getAllTiles():
     return tiles 
 
 def checkValid(array, validOptions):
-    toRemove = []
-    for option in array:
-        if option not in validOptions:
-            toRemove.append(option)
-    for option in toRemove:
-        array.remove(option)
+    # Parsing the array and removing the invalid options
+    lenghtArray  = len(array)-1
+    for i in range(lenghtArray,-1,-1):
+        if array[i] not in validOptions:
+            array.pop(i)
 
 def restart():
     global grid, DIM, tiles, saveButton
+    #  Reset the grid
     grid = Grid(DIM, tiles)
     saveButton.config(state=DISABLED)
     
 
 def save():
     global grid, tiles, DIM 
+    # The image is a grid of tiles
     img = np.zeros((DIM*tileSize,DIM*tileSize,3), dtype=np.uint8)
     for i in range (DIM):
         for j in range (DIM):
+            #  Concatenate the tile with the image to obtain the final image
             subTile = list(np.array(tiles[grid.grid[i][j].options[0]].image))
             img[i*tileSize:(i+1)*tileSize,j*tileSize:(j+1)*tileSize,:] = subTile
     img = PIL.Image.fromarray(img)
@@ -50,12 +54,15 @@ def draw(grid):
             cell = grid.grid[i][j]
             if cell.collapsed:
                 try:
+                    #  For each cell, we draw the tile with the correct index in the tileImages list
                     index = cell.options[0]
                 except IndexError:
+                    # As my version has no backtrack, something there is no possible option so we start from scratch
                     restart()
                 tileImg = tileImages[index]
                 gridLabel[i][j].config(image=tileImg)
             else:
+                #  If the cell is not collapsed, we draw the default tile 
                 defaultTile = tileImages[DEFAULT]
                 gridLabel[i][j].config(image=defaultTile)
 
@@ -68,7 +75,7 @@ def update():
     gridCopy = grid.copy(tiles)
     cell = gridCopy.getCellLeastEntropy()
 
-    # If were done with the grid, we stop the loop
+    # If were done with the grid, we can save the image
     if cell is None:
         saveButton.config(state=ACTIVE)
     else:
@@ -82,15 +89,20 @@ def update():
         #update the grid
         grid = gridCopy
 
-
+    #  We create a copy of the grid to be the next iteration
     nextGrid = Grid(DIM, tiles)
+
     for i in range (DIM):
         for j in range (DIM):
             cell = grid.grid[i][j]
             if cell.collapsed:
+                #  if the cell is collapsed, we just copy the cell to the new grid
                 nextGrid.grid[i][j] = cell.copy()
                 # print("collapsed",nextGrid.grid[i][j])
             else:
+                # If the cell is not collapsed, we look for the possible options
+                # We look in the 4 directions and we remove the options that are not possible
+                # to reduce the entropy of the cell
                 options = [i for i in range(len(tiles))]
 
                 # look up 
@@ -132,16 +144,10 @@ def update():
                         validOptions.extend(valid)
                     checkValid(options, validOptions)
                     
-
-                # print("options", options)
                 nextGrid.grid[i][j] = Cell.createCellFromOptions(options)
-                # print("nextGrid", nextGrid.grid[i][j])
-
                 
 
     grid = nextGrid
-
-    # print(grid)
 
     window.after(1,update)
 
@@ -149,16 +155,24 @@ def update():
 def main():
     global grid, window, DIM, tiles, tileImages, gridLabel, saveButton
 
+    #  Dimension of the grid (number of cells DIM x DIM)
     DIM = 15
 
     window = Tk()
     window.title("Wave function Collapse")
-    window.geometry(f"{DIM*tileSize}x{DIM*tileSize+50}")
+    #  if the dimension is under a certain value, we use a set window size
+    if DIM > 7:
+        window.geometry(f"{DIM*tileSize}x{DIM*tileSize+50}")
+    else:
+        window.geometry("200x200")
     window.resizable(0, 0)
 
     # Load and create all tiles
     # This is really specific to the tiles you input in the tiles folder
     tileImages = getAllTiles()
+
+    #  Create the Tiles
+    #  the code here can be used to create a grid of tiles, but end up bad for saved image a the end of the program
 
     # tiles = [
     #     Tile(tileImages[0], [0,0,0,0]),
