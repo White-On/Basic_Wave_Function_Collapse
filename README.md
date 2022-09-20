@@ -5,3 +5,5 @@ To start the program, you just need to execute the Main.py program with python 3
 
 
 ![Wave_Function_Collapse_Demo](https://user-images.githubusercontent.com/74248238/180746336-c407e20b-0ebd-4e96-9649-5c3bb8fbef73.gif)
+![ImageResult3](https://user-images.githubusercontent.com/74248238/191197811-ac602987-4528-444a-a88c-e798d7f72ada.png)
+![ImageResult2](https://user-images.githubusercontent.com/74248238/191197815-e36b6e08-6519-481d-ac28-c7dc8b984504.png)
