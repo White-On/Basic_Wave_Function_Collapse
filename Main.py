@@ -48,7 +48,8 @@ def save():
     
 
 def draw(grid):
-    global tileImages, gridLabel, tiles
+    global tileImages, gridLabel, tiles, img_list
+    img_list = []
     for i in range (DIM):
         for j in range (DIM):
             cell = grid.grid[i][j]
@@ -64,8 +65,13 @@ def draw(grid):
             else:
                 #  If the cell is not collapsed, we draw the default tile 
                 defaultTile = tileImages[DEFAULT]
-                gridLabel[i][j].config(image=defaultTile)
+                all_option = np.array([tiles_simple_image[opt] for opt in cell.options])
+                mean_all_option = np.mean(all_option, axis=0)
+                img = ImageTk.PhotoImage(PIL.Image.fromarray(mean_all_option.astype(np.uint8),mode="RGB"))
+                img_list.append(img)
+                gridLabel[i][j].config(image=img)
 
+    
 
 def update(): 
     global grid, tiles, saveButton
@@ -153,7 +159,7 @@ def update():
 
 
 def main():
-    global grid, window, DIM, tiles, tileImages, gridLabel, saveButton
+    global grid, window, DIM, tiles, tileImages, gridLabel, saveButton, tiles_simple_image
 
     #  Dimension of the grid (number of cells DIM x DIM)
     DIM = 15
@@ -193,6 +199,7 @@ def main():
     ]
 
     # we retransform the Image objects to PhotoImage objects
+    tiles_simple_image = [np.asarray(img).tolist() for img in tileImages]
     for i in range (len(tileImages)):
         tileImages[i] = ImageTk.PhotoImage(tileImages[i])
 
