@@ -16,7 +16,6 @@ WEST = 3
 window = Tk()
 window.title("Wave function Collapse")
 
-
 class Grid:
     def __init__(self, dim: int, nb_unique_tiles:int) -> None:
         self.grid = [[Cell(nb_unique_tiles) for _ in range(dim)] for _ in range(dim)]
@@ -34,15 +33,51 @@ class Cell:
         return f"Collapsed:{self.collapsed},Options:{self.options}"
 
 class Wave_Function_Collapse:
-    def __init__(self):
-        self.window = None
-        self.tile_size = None
-        self.patern_path = None
-        self.grid_dim = None
-        self.grid_label = None
-        self.tile_img = None
-        self.tile_array = None
-        self.neighboor_edge = None
+    def __init__(self, tile_size:int, patern_path:str, 
+                 grid_dim:int):
+        
+        self.window = Tk()
+        self.window.title("Wave function Collapse")
+
+        # initial mesure
+        self.tile_size = tile_size
+        self.patern_path = patern_path
+        self.grid_dim = grid_dim
+
+        #  if the dimension is under a certain value, we use a set window size
+        if self.grid_dim > 7:
+            self.window.geometry(f"{grid_dim*tile_size}x{grid_dim*tile_size+50}")
+        else:
+            self.window.geometry("200x200")
+        self.window.resizable(0, 0)
+
+        # get the tiles from the patern img
+        patern_img = np.asarray(Image.open(patern_path))
+        self.unique_tiles = get_unique_tiles(extract_tiles_from_img_with_rotation(patern_img))
+        self.tiles_img = [Image.fromarray(tile, mode='RGB').resize((tile_size,tile_size)) for tile in self.unique_tiles]
+
+        # evaluate the neighbor
+        self.neighboor_edge = evaluate_neighboor(self.unique_tiles)      
+
+        self.grid = Grid(grid_dim, len(self.unique_tiles))
+
+        # We average the image to get the default display tile
+        # TODO fix the issue with the resize
+        # and transform this into it's own class
+        default_img = np.mean(self.unique_tiles,axis=0)
+        default_img = ImageTk.PhotoImage(Image.fromarray(default_img.astype(np.uint8),mode="RGB")
+                                            .resize((self.tile_size,self.tile_size)))
+
+        # maintain state for the Label element in order to display them
+        self.grid_label = []
+        for i in range (self.grid_dim):
+            self.grid_label.append([])
+            for j in range (self.grid_dim):
+                
+                label = Label(self.window, image=default_img, borderwidth=0)
+                label.grid(row=i, column=j)
+                self.grid_label[i].append(label)
+
 
     def get_least_entropy_tile(self):
         pass
