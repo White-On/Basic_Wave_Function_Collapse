@@ -98,11 +98,16 @@ class Wave_Function_Collapse:
 
         # get the tiles from the patern img
         patern_img = np.asarray(Image.open(patern_path))
-        self.unique_tiles = get_unique_tiles(extract_tiles_from_img_with_rotation(patern_img, 3))
+        all_tiles_with_rotation = extract_tiles_from_img_with_rotation(patern_img, 3)
+        self.unique_tiles = get_unique_tiles(all_tiles_with_rotation)
+        self.tiles_probabilities = frequency_tiles(all_tiles_with_rotation) 
+
         self.tiles_img = [ImageTk.PhotoImage(Image.fromarray(create_uniform_tile(tile,tile_size), mode='RGBA')) for tile in self.unique_tiles]
         
         # evaluate the neighbor
-        self.neighboor_edge = evaluate_neighboor(self.unique_tiles)      
+        self.neighboor_edge = evaluate_neighboor(self.unique_tiles)     
+
+        assert len(self.unique_tiles) == len(self.tiles_probabilities)
 
         self.grid = Grid(grid_dim, len(self.unique_tiles))
 
@@ -134,7 +139,6 @@ class Wave_Function_Collapse:
         return self.grid.get_lowest_entropy_cell()
 
     def draw(self):
-        # self.cached_label = []
         for i in range(self.grid_dim):
             for j in range(self.grid_dim):
                 cell = self.grid.grid[i][j]
@@ -151,14 +155,26 @@ class Wave_Function_Collapse:
                 elif cell.checked:
                     all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in cell.options])
                     mean_all_option = np.mean(all_option, axis=0)
+                    print(mean_all_option.shape)
                     img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
-                    # self.cached_label.append(img)
                     cell.cached_img = img
                     self.grid_label[i][j].config(image=img)
-                    # self.grid_label[i][j].config(image=self.default_img)
 
                 cell.checked = False
-                    
+    
+    def collaspe_cell(self, cell:'Cell'):
+        #collapse the cell
+        cell.collapsed = True
+        self.grid.idx_not_collapsed.remove(cell.index)
+        try:
+            options_weights = self.tiles_probabilities[cell.options]
+            # print(f'{options_weights = }, current option = {cell.options}')
+            cell.options = random.choices(cell.options, weights=options_weights)
+            # print(f'final option choice = {cell.options}')
+            # print(f'{cell = }')
+        except Exception as e:
+            print(f'{e}')
+            self.restart()
 
     def update(self):
         self.draw()
@@ -172,18 +188,22 @@ class Wave_Function_Collapse:
             self.saveButton.config(state=ACTIVE)
         else:
             #collapse the cell
-            lowest_entropy_cell.collapsed = True
-            self.grid.idx_not_collapsed.remove(lowest_entropy_cell.index)
-            try:
-                lowest_entropy_cell.options = [random.choice(lowest_entropy_cell.options)]
-                # print(f'{lowest_entropy_cell = }')
-            except Exception as e:
-                # print(f'no options left in the update : {e}')
-                self.restart()
+            self.collaspe_cell(lowest_entropy_cell)
         
             # update the entropy 
             self.reduce_entropy(lowest_entropy_cell,0)
-            # exit()
+        
+        idx_to_remove = []
+        for idx in self.grid.idx_not_collapsed:
+            cell = self.grid.idx_grid[idx]
+            if len(cell.options) == 1:
+                #collapse the cell
+                self.collaspe_cell(cell)
+            
+                # update the entropy 
+                self.reduce_entropy(cell,0)
+
+                idx_to_remove.append(idx)
 
         self.window.after(1,self.update)
     
@@ -207,10 +227,9 @@ class Wave_Function_Collapse:
             validOptions = [];
             for option in cell.options:
                 validOptions += self.neighboor_edge[option][direction];
-            
-
             # Filter the neighbor's options to retain only those that are valid
             neighbor.options = [opt for opt in neighbor.options if opt in validOptions]
+
             return True;
         else:
             return False;
@@ -362,7 +381,7 @@ def main():
     tile_size = 20
     patern_path = "tiles/city.png"
     # Dimension of the grid (number of cells DIM x DIM)
-    grid_dim = 15
+    grid_dim = 30
 
     wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim)
 
@@ -374,9 +393,8 @@ if __name__ == "__main__":
     main()
 
 # TODO 
-# - see what takes too long with library
+# - check for some cell with one option when lowering the entropy to collaspe instantly
 # - adapt for bigger pattern 5x5 and more
-# - probability distribution
 # - clean the code of the no unseful stuff and other
 # - cleanner parameters control
 # - rewrite the readme
