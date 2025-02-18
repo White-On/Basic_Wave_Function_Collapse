@@ -2,14 +2,14 @@ from tkinter import *
 import numpy as np
 from PIL import  ImageTk, Image
 import random
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 NORTH = 0
 EAST = 1
 SOUTH = 2
 WEST = 3
 
-MAX_RECURSION_DEPTH = 5
+MAX_RECURSION_DEPTH = 10
 
 class Grid:
     def __init__(self, dim: int, nb_unique_tiles:int) -> None:
@@ -23,7 +23,6 @@ class Grid:
     
     def get_lowest_entropy_cell(self):
          # Get non-collapsed cells
-        # not_collapsed_cells = [x for xs in self.grid for x in xs if not x.collapsed]
         not_collapsed_cells = self.idx_grid[self.idx_not_collapsed]
 
         if len(not_collapsed_cells) == 0:
@@ -31,7 +30,6 @@ class Grid:
 
         # Find the minimum entropy value
         min_entropy = min(len(cell.options) for cell in not_collapsed_cells)
-        # print(f'{min_entropy = }')
 
         # Collect all cells with the lowest entropy
         lowest_entropy_cells = [cell for cell in not_collapsed_cells if len(cell.options) == min_entropy]
@@ -78,7 +76,7 @@ class Cell:
 
 class Wave_Function_Collapse:
     def __init__(self, tile_size:int, patern_path:str, 
-                 grid_dim:int):
+                 grid_dim:int, rotating_pattern:bool):
         
         self.window = Tk()
         self.window.title("Wave function Collapse")
@@ -97,11 +95,14 @@ class Wave_Function_Collapse:
 
         # get the tiles from the patern img
         patern_img = np.asarray(Image.open(patern_path))
-        all_tiles_with_rotation = extract_tiles_from_img_with_rotation(patern_img, 3)
+        # we remove the absorbance 
+        if patern_img.shape[-1] == 4:
+            patern_img = patern_img[:,:,:-1]
+
+        all_tiles_with_rotation = extract_tiles_from_img_with_rotation(patern_img, 3) if rotating_pattern else extract_tiles_from_img(patern_img, 3)
         self.unique_tiles = get_unique_tiles(all_tiles_with_rotation)
         self.tiles_probabilities = frequency_tiles(all_tiles_with_rotation) 
-
-        self.tiles_img = [ImageTk.PhotoImage(Image.fromarray(create_uniform_tile(tile,tile_size), mode='RGBA')) for tile in self.unique_tiles]
+        self.tiles_img = [ImageTk.PhotoImage(Image.fromarray(create_uniform_tile(tile,tile_size), mode='RGB')) for tile in self.unique_tiles]
         
         # evaluate the neighbor
         self.neighboor_edge = evaluate_neighboor(self.unique_tiles)     
@@ -112,7 +113,7 @@ class Wave_Function_Collapse:
 
         all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in self.grid.idx_grid[0].options])
         mean_all_option = np.mean(all_option, axis=0)
-        self.default_img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
+        self.default_img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGB"))
         
         # maintain state for the Label element in order to display them
         self.grid_label = []
@@ -131,6 +132,8 @@ class Wave_Function_Collapse:
         # Save button
         self.saveButton = Button(self.window, text="Save", command=self.save, state=DISABLED)
         self.saveButton.grid(row=self.grid_dim, column=int(self.grid_dim/2), columnspan=int(self.grid_dim/2), padx=10, pady=10)
+
+        self.progress_bar = tqdm(total=grid_dim**2, desc='Cells collapsed', ncols=100)
 
     def get_lowest_entropy_cell(self):
         return self.grid.get_lowest_entropy_cell()
@@ -156,7 +159,7 @@ class Wave_Function_Collapse:
                         return 
                     all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in cell.options])
                     mean_all_option = np.mean(all_option, axis=0)
-                    img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
+                    img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGB"))
                     cell.cached_img = img
                     self.grid_label[i][j].config(image=img)
 
@@ -166,27 +169,26 @@ class Wave_Function_Collapse:
         #collapse the cell
         cell.collapsed = True
         self.grid.idx_not_collapsed.remove(cell.index)
+        self.progress_bar.update(1)
         try:
             options_weights = self.tiles_probabilities[cell.options]
-            # print(f'{options_weights = }, current option = {cell.options}')
             cell.options = random.choices(cell.options, weights=options_weights)
-            # print(f'final option choice = {cell.options}')
-            # print(f'{cell = }')
         except Exception as e:
-            print(f'{e}')
+            print(f'Error when collapsing a cell {cell}, Exception: {e}')
             self.restart()
             return
 
     def update(self):
         self.draw()
-        # print(len([x for xs in self.grid.grid for x in xs if not x.collapsed]))
-        # print(len([x for xs in self.grid.grid for x in xs if not x.checked]))
         lowest_entropy_cell = self.get_lowest_entropy_cell()
-        # print(len(lowest_entropy_cell.options))
 
         # If were done with the grid, we can save the image
         if lowest_entropy_cell is None:
             self.saveButton.config(state=ACTIVE)
+            # self.progress_bar.refresh()
+            self.progress_bar.close()
+            print(f'Wave Finished ! 🤩')
+            return
         else:
             #collapse the cell
             self.collaspe_cell(lowest_entropy_cell)
@@ -206,14 +208,13 @@ class Wave_Function_Collapse:
 
                 idx_to_remove.append(idx)
 
-        print(f'only {len(self.grid.idx_not_collapsed)} cell to collapse before finishing')
+        # print(f'only {len(self.grid.idx_not_collapsed)} cell to collapse before finishing')
         self.window.after(1,self.update)
     
     def reduce_entropy(self, cell: 'Cell', depth):
         # Stop propagation if max depth is reached or cell already checked
         if (depth > MAX_RECURSION_DEPTH or cell.checked):
             return
-        # print(cell)
         cell.checked = True
 
         neighbors = self.grid.get_neighboor(cell)
@@ -237,12 +238,22 @@ class Wave_Function_Collapse:
             return False;
 
     def restart(self):
+        hard_reset = len(self.grid.idx_not_collapsed) == 0
+
         self.grid = Grid(self.grid_dim, len(self.unique_tiles))
         self.saveButton.config(state=DISABLED)
         [x.config(image=self.default_img) for xs in self.grid_label for x in xs]
 
+        if hard_reset :
+            self.progress_bar.close()
+            self.progress_bar = tqdm(total=self.grid_dim**2, desc='Cells collapsed', ncols=100)
+        else:
+            self.progress_bar.reset()
+
+        self.update()
+
     def save(self):
-        img = np.zeros((self.grid_dim,self.grid_dim,4), dtype=np.uint8)
+        img = np.zeros((self.grid_dim,self.grid_dim,3), dtype=np.uint8)
         N, M, _ = img.shape
         for i in range(N):
             for j in range(M):
@@ -250,6 +261,7 @@ class Wave_Function_Collapse:
 
         img = Image.fromarray(img)
         img.save("WFCOP.png")
+        print('Image saved as "WFCOP.png"')
 
 def copy_tile(source, sx, sy, w):
     """
@@ -257,7 +269,7 @@ def copy_tile(source, sx, sy, w):
     wrapping around edges using modulo indexing.
 
     Args:
-    - source (np.ndarray): Source image as a (H, W, 4) NumPy array (RGBA).
+    - source (np.ndarray): Source image as a (H, W, 4) NumPy array (RGB).
     - sx (int): X-coordinate of the top-left corner in the source.
     - sy (int): Y-coordinate of the top-left corner in the source.
     - w (int): Width of the tile.
@@ -338,23 +350,6 @@ def evaluate_neighboor(list_tiles):
     
     return neighboor
 
-def plot_tiles(list_tiles:list,img=None):
-    nb_tiles = len(list_tiles)
-    if img is None:
-        a,b = nb_tiles//20+1, 20
-    else:
-        a,b = img.shape[:2]
-        a-=2
-        b-=2
-
-    fig, axs = plt.subplots(a, b, figsize=(10,10))
-    for ax, tile in zip(axs.flat, list_tiles):
-        ax.imshow(tile)
-        ax.yaxis.set_visible(False)
-        ax.xaxis.set_visible(False)
-    plt.show()
-    print(f'There is {nb_tiles} tiles in totals')
-
 def create_uniform_tile(tile: np.ndarray, size: int) -> np.ndarray:
     """
     Creates a new tile of given size filled with the middle pixel of the input tile.
@@ -381,15 +376,17 @@ def create_uniform_tile(tile: np.ndarray, size: int) -> np.ndarray:
     return new_tile
 
 def main():
+    # display size of the tile for tkinker
     tile_size = 20
-    patern_path = "tiles/city.png"
-    # Dimension of the grid (number of cells DIM x DIM)
-    grid_dim = 30
+    # number of cell on the grid
+    grid_dim = 15
+    patern_path = "tiles/allDir.png"
+    rotating_pattern = False
 
-    wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim)
+    wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim, rotating_pattern)
 
     wfc.update()
-    # require to launch the window
+    # require to maintain the window
     wfc.window.mainloop()
 
 if __name__ == "__main__":
@@ -397,6 +394,5 @@ if __name__ == "__main__":
 
 # TODO 
 # - adapt for bigger pattern 5x5 and more
-# - clean the code of the no unseful stuff and other
 # - cleanner parameters control
 # - rewrite the readme
