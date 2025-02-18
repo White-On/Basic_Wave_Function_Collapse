@@ -15,15 +15,18 @@ class Grid:
     def __init__(self, dim: int, nb_unique_tiles:int) -> None:
         self.grid = [[Cell(nb_unique_tiles, i+j*dim) for i in range(dim)] for j in range(dim)]
         self.dim = dim
+        self.idx_not_collapsed = list(range(dim**2))
+        self.idx_grid = np.asarray([x for xs in self.grid for x in xs])
         
     def __repr__(self) -> str:
         return str(self.grid)
     
     def get_lowest_entropy_cell(self):
          # Get non-collapsed cells
-        not_collapsed_cells = [x for xs in self.grid for x in xs if not x.collapsed]
+        # not_collapsed_cells = [x for xs in self.grid for x in xs if not x.collapsed]
+        not_collapsed_cells = self.idx_grid[self.idx_not_collapsed]
 
-        if not not_collapsed_cells:
+        if len(not_collapsed_cells) == 0:
             return None  # No available cells
 
         # Find the minimum entropy value
@@ -141,15 +144,16 @@ class Wave_Function_Collapse:
                         idx = cell.options[0]
                     except IndexError:
                         # As my version has no backtrack, something there is no possible option so we start from scratch
-                        print('a cell had no more options, shuting down')
                         self.restart()
                     self.grid_label[i][j].config(image=self.tiles_img[idx])
                 else:
-                    # all_option = np.array([self.unique_tiles[opt] for opt in cell.options])
-                    # mean_all_option = np.mean(all_option, axis=0)
-                    # img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA").resize((self.tile_size,self.tile_size)))
-                    # self.cached_label.append(img)
-                    self.grid_label[i][j].config(image=self.default_img)
+                    all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in cell.options])
+                    mean_all_option = np.mean(all_option, axis=0)
+                    img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
+                    self.cached_label.append(img)
+                    self.grid_label[i][j].config(image=img)
+                    # self.grid_label[i][j].config(image=self.default_img)
+                    
 
     def update(self):
         # TODO only draw what need to be updated
@@ -165,11 +169,12 @@ class Wave_Function_Collapse:
         else:
             #collapse the cell
             lowest_entropy_cell.collapsed = True
+            self.grid.idx_not_collapsed.remove(lowest_entropy_cell.index)
             try:
                 lowest_entropy_cell.options = [random.choice(lowest_entropy_cell.options)]
                 # print(f'{lowest_entropy_cell = }')
             except Exception as e:
-                print(f'no options left in the update : {e}')
+                # print(f'no options left in the update : {e}')
                 self.restart()
         
             # update the entropy 
@@ -205,20 +210,24 @@ class Wave_Function_Collapse:
             return True;
         else:
             return False;
-    
-
 
     def restart(self):
-        print('We tried to restart, shuting down for now')
-        exit()
+        self.grid = Grid(self.grid_dim, len(self.unique_tiles))
+        self.saveButton.config(state=DISABLED)
 
     def save(self):
-        print('We tried to save, shuting down for now')
-        exit()
+        img = np.zeros((self.grid_dim,self.grid_dim,4), dtype=np.uint8)
+        N, M, _ = img.shape
+        for i in range(N):
+            for j in range(M):
+                img[i,j] = create_uniform_tile(self.unique_tiles[self.grid.grid[i][j].options[0]], 1)
+
+        img = Image.fromarray(img)
+        img.save("WFCOP.png")
 
 def main():
     tile_size = 20
-    patern_path = "tiles/city.png"
+    patern_path = "tiles/Flowers.png"
     # Dimension of the grid (number of cells DIM x DIM)
     grid_dim = 15
 
