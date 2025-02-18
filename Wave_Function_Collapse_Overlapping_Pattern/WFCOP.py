@@ -87,7 +87,6 @@ class Wave_Function_Collapse:
         self.tile_size = tile_size
         self.patern_path = patern_path
         self.grid_dim = grid_dim
-        self.cached_label = []
 
         #  if the dimension is under a certain value, we use a set window size
         if self.grid_dim > 7:
@@ -115,8 +114,6 @@ class Wave_Function_Collapse:
         mean_all_option = np.mean(all_option, axis=0)
         self.default_img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
         
-        self.cached_label.append(self.default_img)
-
         # maintain state for the Label element in order to display them
         self.grid_label = []
         for i in range (self.grid_dim):
@@ -150,12 +147,15 @@ class Wave_Function_Collapse:
                     except IndexError:
                         # As my version has no backtrack, something there is no possible option so we start from scratch
                         self.restart()
+                        return
                     self.grid_label[i][j].config(image=self.tiles_img[idx])
 
                 elif cell.checked:
+                    if len(cell.options) == 0:
+                        self.restart()
+                        return 
                     all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in cell.options])
                     mean_all_option = np.mean(all_option, axis=0)
-                    print(mean_all_option.shape)
                     img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
                     cell.cached_img = img
                     self.grid_label[i][j].config(image=img)
@@ -175,6 +175,7 @@ class Wave_Function_Collapse:
         except Exception as e:
             print(f'{e}')
             self.restart()
+            return
 
     def update(self):
         self.draw()
@@ -205,6 +206,7 @@ class Wave_Function_Collapse:
 
                 idx_to_remove.append(idx)
 
+        print(f'only {len(self.grid.idx_not_collapsed)} cell to collapse before finishing')
         self.window.after(1,self.update)
     
     def reduce_entropy(self, cell: 'Cell', depth):
@@ -237,6 +239,7 @@ class Wave_Function_Collapse:
     def restart(self):
         self.grid = Grid(self.grid_dim, len(self.unique_tiles))
         self.saveButton.config(state=DISABLED)
+        [x.config(image=self.default_img) for xs in self.grid_label for x in xs]
 
     def save(self):
         img = np.zeros((self.grid_dim,self.grid_dim,4), dtype=np.uint8)
@@ -393,7 +396,6 @@ if __name__ == "__main__":
     main()
 
 # TODO 
-# - check for some cell with one option when lowering the entropy to collaspe instantly
 # - adapt for bigger pattern 5x5 and more
 # - clean the code of the no unseful stuff and other
 # - cleanner parameters control
