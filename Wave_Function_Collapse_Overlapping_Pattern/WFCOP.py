@@ -71,6 +71,7 @@ class Cell:
         self.options = list(range(nb_unique_tiles))
         self.index = idx
         self.checked = False
+        self.cached_img = None
     
     def __repr__(self) -> str:
         return f"Collapsed:{self.collapsed},Options:{self.options}, Idx:{self.index}"
@@ -133,11 +134,11 @@ class Wave_Function_Collapse:
         return self.grid.get_lowest_entropy_cell()
 
     def draw(self):
-        self.cached_label = []
+        # self.cached_label = []
         for i in range(self.grid_dim):
             for j in range(self.grid_dim):
                 cell = self.grid.grid[i][j]
-                cell.checked = False
+                
                 if cell.collapsed:
                     try:
                         #  For each cell, we draw the tile with the correct index in the tileImages list
@@ -146,13 +147,33 @@ class Wave_Function_Collapse:
                         # As my version has no backtrack, something there is no possible option so we start from scratch
                         self.restart()
                     self.grid_label[i][j].config(image=self.tiles_img[idx])
-                else:
+
+                elif cell.checked:
                     all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in cell.options])
                     mean_all_option = np.mean(all_option, axis=0)
                     img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
-                    self.cached_label.append(img)
+                    # self.cached_label.append(img)
+                    cell.cached_img = img
                     self.grid_label[i][j].config(image=img)
                     # self.grid_label[i][j].config(image=self.default_img)
+
+                cell.checked = False
+    
+    # def draw_cell(self, cell:'Cell'):
+    #     if cell.collapsed:
+    #         try:
+    #             #  For each cell, we draw the tile with the correct index in the tileImages list
+    #             idx = cell.options[0]
+    #         except IndexError:
+    #             # As my version has no backtrack, something there is no possible option so we start from scratch
+    #             self.restart()
+    #         self.grid_label[i][j].config(image=self.tiles_img[idx])
+    #     else:
+    #         all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in cell.options])
+    #         mean_all_option = np.mean(all_option, axis=0)
+    #         img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
+    #         self.cached_label.append(img)
+    #         self.grid_label[i][j].config(image=img)
                     
 
     def update(self):
