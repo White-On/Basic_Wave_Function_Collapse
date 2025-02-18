@@ -121,6 +121,11 @@ class Wave_Function_Collapse:
                 label = Label(self.window, image=self.default_img, borderwidth=0)
                 label.grid(row=i, column=j)
                 self.grid_label[i].append(label)
+        
+        for cell in self.grid.idx_grid:
+            cell.checked = True
+        
+        self.draw()
 
         # Restart button
         self.restartButton = Button(self.window, text="Restart", command=self.restart)
@@ -158,26 +163,9 @@ class Wave_Function_Collapse:
                     # self.grid_label[i][j].config(image=self.default_img)
 
                 cell.checked = False
-    
-    # def draw_cell(self, cell:'Cell'):
-    #     if cell.collapsed:
-    #         try:
-    #             #  For each cell, we draw the tile with the correct index in the tileImages list
-    #             idx = cell.options[0]
-    #         except IndexError:
-    #             # As my version has no backtrack, something there is no possible option so we start from scratch
-    #             self.restart()
-    #         self.grid_label[i][j].config(image=self.tiles_img[idx])
-    #     else:
-    #         all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in cell.options])
-    #         mean_all_option = np.mean(all_option, axis=0)
-    #         img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
-    #         self.cached_label.append(img)
-    #         self.grid_label[i][j].config(image=img)
                     
 
     def update(self):
-        # TODO only draw what need to be updated
         self.draw()
         # print(len([x for xs in self.grid.grid for x in xs if not x.collapsed]))
         # print(len([x for xs in self.grid.grid for x in xs if not x.checked]))
@@ -245,18 +233,6 @@ class Wave_Function_Collapse:
 
         img = Image.fromarray(img)
         img.save("WFCOP.png")
-
-def main():
-    tile_size = 20
-    patern_path = "tiles/Flowers.png"
-    # Dimension of the grid (number of cells DIM x DIM)
-    grid_dim = 15
-
-    wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim)
-
-    wfc.update()
-    # require to launch the window
-    wfc.window.mainloop()
 
 def copy_tile(source, sx, sy, w):
     """
@@ -387,5 +363,25 @@ def create_uniform_tile(tile: np.ndarray, size: int) -> np.ndarray:
 
     return new_tile
 
+def main():
+    tile_size = 20
+    patern_path = "tiles/city.png"
+    # Dimension of the grid (number of cells DIM x DIM)
+    grid_dim = 15
+
+    wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim)
+
+    wfc.update()
+    # require to launch the window
+    wfc.window.mainloop()
+
 if __name__ == "__main__":
     main()
+
+# TODO 
+# - see what takes too long with library
+# - adapt for bigger pattern 5x5 and more
+# - probability distribution
+# - clean the code of the no unseful stuff and other
+# - cleanner parameters control
+# - rewrite the readme
