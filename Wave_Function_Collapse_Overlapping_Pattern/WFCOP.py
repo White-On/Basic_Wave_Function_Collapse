@@ -106,9 +106,9 @@ class Wave_Function_Collapse:
 
         self.grid = Grid(grid_dim, len(self.unique_tiles))
 
-        self.default_img = np.mean(self.unique_tiles,axis=0)
-        self.default_img = ImageTk.PhotoImage(Image.fromarray(self.default_img.astype(np.uint8),mode="RGBA")
-                                            .resize((self.tile_size,self.tile_size)))
+        all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in self.grid.idx_grid[0].options])
+        mean_all_option = np.mean(all_option, axis=0)
+        self.default_img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA"))
         
         self.cached_label.append(self.default_img)
 
@@ -122,11 +122,6 @@ class Wave_Function_Collapse:
                 label.grid(row=i, column=j)
                 self.grid_label[i].append(label)
         
-        for cell in self.grid.idx_grid:
-            cell.checked = True
-        
-        self.draw()
-
         # Restart button
         self.restartButton = Button(self.window, text="Restart", command=self.restart)
         self.restartButton.grid(row=self.grid_dim, column=0, columnspan=int(self.grid_dim/2), padx=10, pady=10)
