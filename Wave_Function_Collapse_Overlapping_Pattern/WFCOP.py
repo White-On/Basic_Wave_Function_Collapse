@@ -1,4 +1,3 @@
-import os
 from tkinter import *
 import numpy as np
 from PIL import  ImageTk, Image
