@@ -3,6 +3,7 @@ import numpy as np
 from PIL import  ImageTk, Image
 import random
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 NORTH = 0
 EAST = 1
@@ -76,7 +77,7 @@ class Cell:
 
 class Wave_Function_Collapse:
     def __init__(self, tile_size:int, patern_path:str, 
-                 grid_dim:int, rotating_pattern:bool):
+                 grid_dim:int, rotating_pattern:bool, draw_process=True):
         
         self.window = Tk()
         self.window.title("Wave function Collapse")
@@ -85,6 +86,7 @@ class Wave_Function_Collapse:
         self.tile_size = tile_size
         self.patern_path = patern_path
         self.grid_dim = grid_dim
+        self.draw_process = draw_process
 
         #  if the dimension is under a certain value, we use a set window size
         if self.grid_dim > 7:
@@ -101,6 +103,7 @@ class Wave_Function_Collapse:
 
         all_tiles_with_rotation = extract_tiles_from_img_with_rotation(patern_img, 3) if rotating_pattern else extract_tiles_from_img(patern_img, 3)
         self.unique_tiles = get_unique_tiles(all_tiles_with_rotation)
+        # plot_tiles(self.unique_tiles)
         self.tiles_probabilities = frequency_tiles(all_tiles_with_rotation) 
         self.tiles_img = [ImageTk.PhotoImage(Image.fromarray(create_uniform_tile(tile,tile_size), mode='RGB')) for tile in self.unique_tiles]
         
@@ -150,13 +153,13 @@ class Wave_Function_Collapse:
                     except IndexError:
                         # As my version has no backtrack, something there is no possible option so we start from scratch
                         self.restart()
-                        return
+                        return False
                     self.grid_label[i][j].config(image=self.tiles_img[idx])
 
                 elif cell.checked:
                     if len(cell.options) == 0:
                         self.restart()
-                        return 
+                        return False
                     all_option = np.array([create_uniform_tile(self.unique_tiles[opt],self.tile_size) for opt in cell.options])
                     mean_all_option = np.mean(all_option, axis=0)
                     img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGB"))
@@ -164,22 +167,34 @@ class Wave_Function_Collapse:
                     self.grid_label[i][j].config(image=img)
 
                 cell.checked = False
-    
+        return True
     def collaspe_cell(self, cell:'Cell'):
         #collapse the cell
         cell.collapsed = True
         self.grid.idx_not_collapsed.remove(cell.index)
         self.progress_bar.update(1)
-        try:
-            options_weights = self.tiles_probabilities[cell.options]
-            cell.options = random.choices(cell.options, weights=options_weights)
-        except Exception as e:
-            print(f'Error when collapsing a cell {cell}, Exception: {e}')
+        
+        if len(cell.options) == 0:
+            print(f'Error when collapsing a cell {cell}')
             self.restart()
-            return
+            return False
+        
+        options_weights = self.tiles_probabilities[cell.options]
+        cell.options = random.choices(cell.options, weights=options_weights)
+            
+
+        return True
 
     def update(self):
-        self.draw()
+        if self.draw_process:
+            if not self.draw():
+                return 
+        else:
+            # uncheck all cells
+            checked_cells = [cell for cell in self.grid.idx_grid if cell.checked==True]
+            for cell in checked_cells:
+                cell.checked = False
+
         lowest_entropy_cell = self.get_lowest_entropy_cell()
 
         # If were done with the grid, we can save the image
@@ -188,10 +203,13 @@ class Wave_Function_Collapse:
             # self.progress_bar.refresh()
             self.progress_bar.close()
             print(f'Wave Finished ! 🤩')
+            if not self.draw_process:
+                self.draw()
             return
         else:
             #collapse the cell
-            self.collaspe_cell(lowest_entropy_cell)
+            if not self.collaspe_cell(lowest_entropy_cell):
+                return
         
             # update the entropy 
             self.reduce_entropy(lowest_entropy_cell,0)
@@ -201,14 +219,14 @@ class Wave_Function_Collapse:
             cell = self.grid.idx_grid[idx]
             if len(cell.options) == 1:
                 #collapse the cell
-                self.collaspe_cell(cell)
+                if not self.collaspe_cell(cell):
+                    return
             
                 # update the entropy 
                 self.reduce_entropy(cell,0)
 
                 idx_to_remove.append(idx)
 
-        # print(f'only {len(self.grid.idx_not_collapsed)} cell to collapse before finishing')
         self.window.after(1,self.update)
     
     def reduce_entropy(self, cell: 'Cell', depth):
@@ -375,15 +393,34 @@ def create_uniform_tile(tile: np.ndarray, size: int) -> np.ndarray:
 
     return new_tile
 
+def plot_tiles(list_tiles:list,img=None):
+    """Debug function"""
+    nb_tiles = len(list_tiles)
+    if img is None:
+        a,b = nb_tiles//20+1, 20
+    else:
+        a,b = img.shape[:2]
+        a-=2
+        b-=2
+
+    fig, axs = plt.subplots(a, b, figsize=(10,10))
+    for ax, tile in zip(axs.flat, list_tiles):
+        ax.imshow(tile)
+        ax.yaxis.set_visible(False)
+        ax.xaxis.set_visible(False)
+    plt.show()
+    print(f'There is {nb_tiles} tiles in totals')
+
 def main():
     # display size of the tile for tkinker
-    tile_size = 20
+    tile_size = 10
     # number of cell on the grid
-    grid_dim = 15
-    patern_path = "tiles/allDir.png"
+    grid_dim = 50
+    patern_path = "tiles/flowers.png"
     rotating_pattern = False
+    draw_process = False
 
-    wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim, rotating_pattern)
+    wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim, rotating_pattern, draw_process)
 
     wfc.update()
     # require to maintain the window
@@ -394,5 +431,5 @@ if __name__ == "__main__":
 
 # TODO 
 # - adapt for bigger pattern 5x5 and more
-# - cleanner parameters control
+# - plot neighbor correclty
 # - rewrite the readme
