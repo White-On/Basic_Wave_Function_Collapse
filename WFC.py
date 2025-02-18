@@ -2,35 +2,76 @@ import os
 from tkinter import *
 import numpy as np
 from PIL import  ImageTk, Image
-
-tile_size = 20
-patern_path = "tiles/city.png"
-# Dimension of the grid (number of cells DIM x DIM)
-grid_dim = 15
+import random
+import matplotlib.pyplot as plt
 
 NORTH = 0
 EAST = 1
 SOUTH = 2
 WEST = 3
 
-window = Tk()
-window.title("Wave function Collapse")
+MAX_RECURSION_DEPTH = 5
 
 class Grid:
     def __init__(self, dim: int, nb_unique_tiles:int) -> None:
-        self.grid = [[Cell(nb_unique_tiles) for _ in range(dim)] for _ in range(dim)]
+        self.grid = [[Cell(nb_unique_tiles, i+j*dim) for i in range(dim)] for j in range(dim)]
         self.dim = dim
         
     def __repr__(self) -> str:
         return str(self.grid)
+    
+    def get_lowest_entropy_cell(self):
+         # Get non-collapsed cells
+        not_collapsed_cells = [x for xs in self.grid for x in xs if not x.collapsed]
+
+        if not not_collapsed_cells:
+            return None  # No available cells
+
+        # Find the minimum entropy value
+        min_entropy = min(len(cell.options) for cell in not_collapsed_cells)
+        # print(f'{min_entropy = }')
+
+        # Collect all cells with the lowest entropy
+        lowest_entropy_cells = [cell for cell in not_collapsed_cells if len(cell.options) == min_entropy]
+
+        # Return a random cell from those with the lowest entropy
+        return random.choice(lowest_entropy_cells)
+    
+    def get_neighboor(self, cell):
+        """Returns a dictionary of neighboring cells with directions as keys."""
+        neighbors = {}
+
+        # Find the position of the cell in the grid
+        for i in range(self.dim):
+            for j in range(self.dim):
+                if self.grid[i][j] == cell:
+                    # Define possible directions with their corresponding row/col adjustments
+                    directions = {
+                        NORTH: (i - 1, j),
+                        SOUTH: (i + 1, j),
+                        WEST: (i, j - 1),
+                        EAST: (i, j + 1),
+                    }
+
+                    # Check each direction and add valid neighbors
+                    for direction, (ni, nj) in directions.items():
+                        if 0 <= ni < self.dim and 0 <= nj < self.dim:
+                            neighbors[direction] = self.grid[ni][nj]
+
+                    return neighbors  # Return as soon as we find the cell
+
+        return {}  # Return an empty dictionary if the cell is not found
+
 
 class Cell:
-    def __init__(self, nb_unique_tiles:int) -> None:
+    def __init__(self, nb_unique_tiles:int, idx:int) -> None:
         self.collapsed = False
         self.options = list(range(nb_unique_tiles))
+        self.index = idx
+        self.checked = False
     
     def __repr__(self) -> str:
-        return f"Collapsed:{self.collapsed},Options:{self.options}"
+        return f"Collapsed:{self.collapsed},Options:{self.options}, Idx:{self.index}"
 
 class Wave_Function_Collapse:
     def __init__(self, tile_size:int, patern_path:str, 
@@ -43,6 +84,7 @@ class Wave_Function_Collapse:
         self.tile_size = tile_size
         self.patern_path = patern_path
         self.grid_dim = grid_dim
+        self.cached_label = []
 
         #  if the dimension is under a certain value, we use a set window size
         if self.grid_dim > 7:
@@ -53,20 +95,19 @@ class Wave_Function_Collapse:
 
         # get the tiles from the patern img
         patern_img = np.asarray(Image.open(patern_path))
-        self.unique_tiles = get_unique_tiles(extract_tiles_from_img_with_rotation(patern_img))
-        self.tiles_img = [Image.fromarray(tile, mode='RGB').resize((tile_size,tile_size)) for tile in self.unique_tiles]
-
+        self.unique_tiles = get_unique_tiles(extract_tiles_from_img_with_rotation(patern_img, 3))
+        self.tiles_img = [ImageTk.PhotoImage(Image.fromarray(create_uniform_tile(tile,tile_size), mode='RGBA')) for tile in self.unique_tiles]
+        
         # evaluate the neighbor
         self.neighboor_edge = evaluate_neighboor(self.unique_tiles)      
 
         self.grid = Grid(grid_dim, len(self.unique_tiles))
 
-        # We average the image to get the default display tile
-        # TODO fix the issue with the resize
-        # and transform this into it's own class
-        default_img = np.mean(self.unique_tiles,axis=0)
-        default_img = ImageTk.PhotoImage(Image.fromarray(default_img.astype(np.uint8),mode="RGB")
+        self.default_img = np.mean(self.unique_tiles,axis=0)
+        self.default_img = ImageTk.PhotoImage(Image.fromarray(self.default_img.astype(np.uint8),mode="RGBA")
                                             .resize((self.tile_size,self.tile_size)))
+        
+        self.cached_label.append(self.default_img)
 
         # maintain state for the Label element in order to display them
         self.grid_label = []
@@ -74,107 +115,158 @@ class Wave_Function_Collapse:
             self.grid_label.append([])
             for j in range (self.grid_dim):
                 
-                label = Label(self.window, image=default_img, borderwidth=0)
+                label = Label(self.window, image=self.default_img, borderwidth=0)
                 label.grid(row=i, column=j)
                 self.grid_label[i].append(label)
 
+        # Restart button
+        self.restartButton = Button(self.window, text="Restart", command=self.restart)
+        self.restartButton.grid(row=self.grid_dim, column=0, columnspan=int(self.grid_dim/2), padx=10, pady=10)
 
-    def get_least_entropy_tile(self):
-        pass
+        # Save button
+        self.saveButton = Button(self.window, text="Save", command=self.save, state=DISABLED)
+        self.saveButton.grid(row=self.grid_dim, column=int(self.grid_dim/2), columnspan=int(self.grid_dim/2), padx=10, pady=10)
 
-    def draw():
-        pass
+    def get_lowest_entropy_cell(self):
+        return self.grid.get_lowest_entropy_cell()
 
-    def uptade():
-        pass
+    def draw(self):
+        self.cached_label = []
+        for i in range(self.grid_dim):
+            for j in range(self.grid_dim):
+                cell = self.grid.grid[i][j]
+                cell.checked = False
+                if cell.collapsed:
+                    try:
+                        #  For each cell, we draw the tile with the correct index in the tileImages list
+                        idx = cell.options[0]
+                    except IndexError:
+                        # As my version has no backtrack, something there is no possible option so we start from scratch
+                        print('a cell had no more options, shuting down')
+                        self.restart()
+                    self.grid_label[i][j].config(image=self.tiles_img[idx])
+                else:
+                    # all_option = np.array([self.unique_tiles[opt] for opt in cell.options])
+                    # mean_all_option = np.mean(all_option, axis=0)
+                    # img = ImageTk.PhotoImage(Image.fromarray(mean_all_option.astype(np.uint8),mode="RGBA").resize((self.tile_size,self.tile_size)))
+                    # self.cached_label.append(img)
+                    self.grid_label[i][j].config(image=self.default_img)
+
+    def update(self):
+        # TODO only draw what need to be updated
+        self.draw()
+        # print(len([x for xs in self.grid.grid for x in xs if not x.collapsed]))
+        # print(len([x for xs in self.grid.grid for x in xs if not x.checked]))
+        lowest_entropy_cell = self.get_lowest_entropy_cell()
+        # print(len(lowest_entropy_cell.options))
+
+        # If were done with the grid, we can save the image
+        if lowest_entropy_cell is None:
+            self.saveButton.config(state=ACTIVE)
+        else:
+            #collapse the cell
+            lowest_entropy_cell.collapsed = True
+            try:
+                lowest_entropy_cell.options = [random.choice(lowest_entropy_cell.options)]
+                # print(f'{lowest_entropy_cell = }')
+            except Exception as e:
+                print(f'no options left in the update : {e}')
+                self.restart()
+        
+            # update the entropy 
+            self.reduce_entropy(lowest_entropy_cell,0)
+            # exit()
+
+        self.window.after(1,self.update)
+    
+    def reduce_entropy(self, cell: 'Cell', depth):
+        # Stop propagation if max depth is reached or cell already checked
+        if (depth > MAX_RECURSION_DEPTH or cell.checked):
+            return
+        # print(cell)
+        cell.checked = True
+
+        neighbors = self.grid.get_neighboor(cell)
+        
+        for dir, neighbor_cell in neighbors.items():
+            if (self.check_options(cell, neighbor_cell, dir)):
+                self.reduce_entropy(neighbor_cell, depth + 1);
+    
+    def check_options(self, cell:'Cell', neighbor:'Cell', direction):
+        # Check if the neighbor is valid and not already collapsed
+        if not neighbor.collapsed:
+            # Collect valid options based on the current cell's adjacency rules
+            validOptions = [];
+            for option in cell.options:
+                validOptions += self.neighboor_edge[option][direction];
+            
+
+            # Filter the neighbor's options to retain only those that are valid
+            neighbor.options = [opt for opt in neighbor.options if opt in validOptions]
+            return True;
+        else:
+            return False;
+    
+
+
+    def restart(self):
+        print('We tried to restart, shuting down for now')
+        exit()
+
+    def save(self):
+        print('We tried to save, shuting down for now')
+        exit()
 
 def main():
+    tile_size = 20
+    patern_path = "tiles/city.png"
+    # Dimension of the grid (number of cells DIM x DIM)
+    grid_dim = 15
 
-    #  if the dimension is under a certain value, we use a set window size
-    if grid_dim > 7:
-        window.geometry(f"{grid_dim*tile_size}x{grid_dim*tile_size+50}")
-    else:
-        window.geometry("200x200")
-    window.resizable(0, 0)
+    wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim)
 
-    # Load and create all tiles
+    wfc.update()
+    # require to launch the window
+    wfc.window.mainloop()
 
-    patern_img = np.asarray(Image.open(patern_path))
-    unique_tiles = get_unique_tiles(extract_tiles_from_img_with_rotation(patern_img))
-    tiles_img = [Image.fromarray(tile, mode='RGB').resize((tile_size,tile_size)) for tile in unique_tiles]
+def copy_tile(source, sx, sy, w):
+    """
+    Copy a w x w tile from the source image to the destination array, 
+    wrapping around edges using modulo indexing.
 
-    # evaluate the neighbor
+    Args:
+    - source (np.ndarray): Source image as a (H, W, 4) NumPy array (RGBA).
+    - sx (int): X-coordinate of the top-left corner in the source.
+    - sy (int): Y-coordinate of the top-left corner in the source.
+    - w (int): Width of the tile.
+    """
 
-    neighboor_edge = evaluate_neighboor(unique_tiles)
+    H, W, _ = source.shape  # Get source dimensions
 
-    grid = Grid(grid_dim, len(unique_tiles))
+    # Compute wrapped indices for x and y using modulo
+    x_indices = np.mod(np.arange(sx, sx + w), W)
+    y_indices = np.mod(np.arange(sy, sy + w), H)
 
-    # We average the image to get the default display tile
-    # TODO fix the issue with the resize
-    # and transform this into it's own class
-    default_img = np.mean(unique_tiles,axis=0)
-    default_img = ImageTk.PhotoImage(Image.fromarray(default_img.astype(np.uint8),mode="RGB")
-                                        .resize((tile_size,tile_size)))
+    # Extract the tile using NumPy advanced indexing
+    tile = source[np.ix_(y_indices, x_indices)]  # Shape (w, w, 4)
 
-    # maintain state for the Label element in order to display them
-    grid_label = []
-    for i in range (grid_dim):
-        grid_label.append([])
-        for j in range (grid_dim):
-            
-            label = Label(window, image=default_img, borderwidth=0)
-            label.grid(row=i, column=j)
-            grid_label[i].append(label)
-    
-    # # Restart button
-    # restartButton = Button(window, text="Restart", command=restart)
-    # restartButton.grid(row=DIM, column=0, columnspan=int(DIM/2), padx=10, pady=10)
-    # # Save button
-    # saveButton = Button(window, text="Save", command=save, state=DISABLED)
-    # saveButton.grid(row=DIM, column=int(DIM/2), columnspan=int(DIM/2), padx=10, pady=10)
+    # Copy to destination
+    return tile
 
-    # Start the update loop
-    update(grid, unique_tiles, neighboor_edge, tiles_img, grid_label, default_img)
-    # mainloop
-    window.mainloop()
-
-def update(grid, unique_tiles, neighboor_edge, tiles_img, grid_label, default_tile):
-    draw_grid(grid, tiles_img, grid_label, default_tile)
-
-    window.after(1,update, grid, unique_tiles, neighboor_edge, tiles_img, grid_label, default_tile)
-
-def draw_grid(grid, tiles_img, grid_label, default_tile):
-    img_list = []
-    for i in range(grid.dim):
-        for j in range(grid.dim):
-            cell = grid.grid[i][j]
-            if cell.collapsed:
-                try:
-                    #  For each cell, we draw the tile with the correct index in the tileImages list
-                    index = cell.options[0]
-                except IndexError:
-                    # restart()
-                    print("error no more options")
-                    exit()
-                tileImg = tiles_img[index]
-                grid_label[i][j].config(image=tileImg)
-            else:
-                grid_label[i][j].config(image=default_tile)
-
-def extract_tiles_from_img(img:np.array, tile_size=(3,3)) -> list:
+def extract_tiles_from_img(img:np.array, tile_size:int) -> list:
     extracted_tiles = []
     N,M,_ = img.shape
-    for i in range(N-tile_size[0]+1):
-        for j in range(M-tile_size[1]+1):
-            tile = img[i:i+tile_size[0],j:j+tile_size[1]]
+    for i in range(N):
+        for j in range(M):
+            tile = copy_tile(img, i, j, tile_size)
             extracted_tiles.append(tile)
     return extracted_tiles
 
-def extract_tiles_from_img_with_rotation(img):
+def extract_tiles_from_img_with_rotation(img, tile_size:int):
     result = []
     copy = img.copy()
     for _ in range(4):
-        result += extract_tiles_from_img(copy)
+        result += extract_tiles_from_img(copy,tile_size)
         copy = np.rot90(copy)
     return result
 
@@ -224,6 +316,47 @@ def evaluate_neighboor(list_tiles):
     
     return neighboor
 
+def plot_tiles(list_tiles:list,img=None):
+    nb_tiles = len(list_tiles)
+    if img is None:
+        a,b = nb_tiles//20+1, 20
+    else:
+        a,b = img.shape[:2]
+        a-=2
+        b-=2
+
+    fig, axs = plt.subplots(a, b, figsize=(10,10))
+    for ax, tile in zip(axs.flat, list_tiles):
+        ax.imshow(tile)
+        ax.yaxis.set_visible(False)
+        ax.xaxis.set_visible(False)
+    plt.show()
+    print(f'There is {nb_tiles} tiles in totals')
+
+def create_uniform_tile(tile: np.ndarray, size: int) -> np.ndarray:
+    """
+    Creates a new tile of given size filled with the middle pixel of the input tile.
+    
+    Parameters:
+        tile (np.ndarray): Input tile (2D or 3D NumPy array).
+        size (int): Size of the output tile (size x size).
+    
+    Returns:
+        np.ndarray: A new tile filled with the middle pixel value.
+    """
+    # Get the dimensions of the input tile
+    h, w = tile.shape[:2]
+
+    # Find the middle pixel coordinates
+    mid_x, mid_y = h // 2, w // 2
+
+    # Extract the middle pixel (handles both grayscale and RGB images)
+    middle_pixel = tile[mid_x, mid_y]
+
+    # Create a new tile filled with the middle pixel value
+    new_tile = np.full((size, size, *middle_pixel.shape) if tile.ndim == 3 else (size, size), middle_pixel, dtype=tile.dtype)
+
+    return new_tile
 
 if __name__ == "__main__":
     main()
