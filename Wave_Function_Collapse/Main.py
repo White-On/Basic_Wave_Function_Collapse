@@ -1,10 +1,10 @@
-import os
 import PIL
 from tkinter import *
 from Tile import *
 from Grid import *
 import numpy as np
 from PIL import  ImageTk
+from pathlib import Path
 
 DEFAULT = 5 #the index of the default tile 5 without allDir, 6 otherwise
 tileSize = 20
@@ -17,7 +17,7 @@ def getAllTiles():
     tilesName = [ "blank", "up", "right", "down", "left","default"];
     tiles = []
     for i in range (len(tilesName)):
-        tiles.append(PIL.Image.open(os.path.dirname(os.path.abspath(__file__))+"/tiles/"+tilesName[i]+".png").resize((tileSize,tileSize)))
+        tiles.append(PIL.Image.open(Path(__file__).parents[1] / f"tiles/{tilesName[i]}.png").resize((tileSize,tileSize)))
     return tiles 
 
 def checkValid(array, validOptions):

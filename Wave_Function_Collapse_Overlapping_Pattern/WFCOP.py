@@ -4,13 +4,14 @@ from PIL import  ImageTk, Image
 import random
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 NORTH = 0
 EAST = 1
 SOUTH = 2
 WEST = 3
 
-MAX_RECURSION_DEPTH = 10
+MAX_RECURSION_DEPTH = 5
 
 class Grid:
     def __init__(self, dim: int, nb_unique_tiles:int) -> None:
@@ -71,9 +72,10 @@ class Cell:
         self.index = idx
         self.checked = False
         self.cached_img = None
+        self.fully_draw = False
     
     def __repr__(self) -> str:
-        return f"Collapsed:{self.collapsed},Options:{self.options}, Idx:{self.index}"
+        return f"Collapsed:{self.collapsed}, Options:{self.options}, Idx:{self.index}"
 
 class Wave_Function_Collapse:
     def __init__(self, tile_size:int, patern_path:str, 
@@ -146,7 +148,7 @@ class Wave_Function_Collapse:
             for j in range(self.grid_dim):
                 cell = self.grid.grid[i][j]
                 
-                if cell.collapsed:
+                if cell.collapsed and not cell.fully_draw:
                     try:
                         #  For each cell, we draw the tile with the correct index in the tileImages list
                         idx = cell.options[0]
@@ -155,6 +157,7 @@ class Wave_Function_Collapse:
                         self.restart()
                         return False
                     self.grid_label[i][j].config(image=self.tiles_img[idx])
+                    cell.fully_draw = True
 
                 elif cell.checked:
                     if len(cell.options) == 0:
@@ -173,7 +176,7 @@ class Wave_Function_Collapse:
         cell.collapsed = True
         self.grid.idx_not_collapsed.remove(cell.index)
         self.progress_bar.update(1)
-        
+
         if len(cell.options) == 0:
             print(f'Error when collapsing a cell {cell}')
             self.restart()
@@ -200,7 +203,6 @@ class Wave_Function_Collapse:
         # If were done with the grid, we can save the image
         if lowest_entropy_cell is None:
             self.saveButton.config(state=ACTIVE)
-            # self.progress_bar.refresh()
             self.progress_bar.close()
             print(f'Wave Finished ! 🤩')
             if not self.draw_process:
@@ -214,7 +216,7 @@ class Wave_Function_Collapse:
             # update the entropy 
             self.reduce_entropy(lowest_entropy_cell,0)
         
-        idx_to_remove = []
+        # we collapse cells with one options left
         for idx in self.grid.idx_not_collapsed:
             cell = self.grid.idx_grid[idx]
             if len(cell.options) == 1:
@@ -225,7 +227,6 @@ class Wave_Function_Collapse:
                 # update the entropy 
                 self.reduce_entropy(cell,0)
 
-                idx_to_remove.append(idx)
 
         self.window.after(1,self.update)
     
@@ -413,12 +414,12 @@ def plot_tiles(list_tiles:list,img=None):
 
 def main():
     # display size of the tile for tkinker
-    tile_size = 10
+    tile_size = 20
     # number of cell on the grid
-    grid_dim = 50
-    patern_path = "tiles/flowers.png"
-    rotating_pattern = False
-    draw_process = False
+    grid_dim = 40
+    patern_path = Path(__file__).parents[1]/"tiles/flowers.png"
+    rotating_pattern = True
+    draw_process = True
 
     wfc = Wave_Function_Collapse(tile_size, patern_path, grid_dim, rotating_pattern, draw_process)
 
@@ -429,7 +430,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO 
-# - adapt for bigger pattern 5x5 and more
-# - plot neighbor correclty
-# - rewrite the readme
